@@ -1,0 +1,24 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'pl.viamio.serwis'
+    compileSdk 34
+    defaultConfig {
+        applicationId 'pl.viamio.serwis'
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName '1.0'
+    }
+    signingConfigs {
+        release {
+            storeFile file('serwis.jks')
+            storePassword 'serwismaszyn'
+            keyAlias 'serwis'
+            keyPassword 'serwismaszyn'
+        }
+    }
+    buildTypes {
+        release { minifyEnabled false; signingConfig signingConfigs.release }
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}

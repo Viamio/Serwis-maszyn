@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Książka Serwisowa Maszyn</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: warsztatowa karta maszyny — lista maszyn ze stanem, szczegóły jako pełny ekran, liczby w mono */
+:root{
+  --bg:#eef0f2; --surface:#ffffff; --surface-2:#f5f6f8; --line:#d5d9de;
+  --fg:#1c232b; --muted:#5f6b77;
+  --accent:#d98a00; --accent-ink:#1c232b;
+  --ok:#2f7d4f; --ok-bg:#e3f2e8; --soon:#b36b00; --soon-bg:#fff1d6; --late:#c0392b; --late-bg:#fbe3e0;
+  --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#14181d; --surface:#1d232a; --surface-2:#232a32; --line:#333c46;
+  --fg:#e8ecf0; --muted:#97a3ae; --accent:#f0a422; --accent-ink:#14181d;
+  --ok:#5fc489; --ok-bg:#1d3226; --soon:#f0b54a; --soon-bg:#3a2d12; --late:#ff7b6b; --late-bg:#3d1f1b; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#14181d; --surface:#1d232a; --surface-2:#232a32; --line:#333c46;
+  --fg:#e8ecf0; --muted:#97a3ae; --accent:#f0a422; --accent-ink:#14181d;
+  --ok:#5fc489; --ok-bg:#1d3226; --soon:#f0b54a; --soon-bg:#3a2d12; --late:#ff7b6b; --late-bg:#3d1f1b; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{-webkit-text-size-adjust:100%}
+.backup{display:flex;flex-direction:column;gap:8px}
+
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px 96px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.wrap{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;letter-spacing:.01em}
+h1{font-size:30px;line-height:1.05;text-transform:uppercase}
+h2{font-size:22px;text-transform:uppercase}
+h3{font-size:18px}
+.label{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+header.top{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;padding-top:6px;border-bottom:3px solid var(--accent);padding-bottom:10px}
+header.top .sub{font-size:13px;color:var(--muted)}
+button,.btn{font:inherit;font-weight:600;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--fg);padding:10px 14px;cursor:pointer;min-height:44px}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button.ghost{background:transparent}
+button.danger{color:var(--late);border-color:var(--late)}
+button.small{min-height:36px;padding:6px 10px;font-size:14px}
+button:disabled{opacity:.5;cursor:default}
+input,select,textarea{font:inherit;width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--fg);min-height:44px}
+textarea{min-height:70px;resize:vertical}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+@media (max-width:420px){.grid3{grid-template-columns:1fr 1fr}}
+.alerts{display:flex;flex-direction:column;gap:6px}
+.alert{display:flex;gap:10px;align-items:center;padding:10px 12px;border-radius:8px;font-size:15px;cursor:pointer;border:0;text-align:left;width:100%;min-height:0}
+.alert.late{background:var(--late-bg);color:var(--late)}
+.alert.soon{background:var(--soon-bg);color:var(--soon)}
+.alert b{color:var(--fg)}
+.cards{display:flex;flex-direction:column;gap:10px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;text-align:left;width:100%;min-height:0;font-weight:400}
+.card.example{border-style:dashed}
+.card-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.card-head h3{font-size:22px;text-transform:uppercase}
+.hours{font-family:var(--mono);font-size:20px;font-weight:600;white-space:nowrap}
+.hours small{font-size:12px;color:var(--muted);font-family:var(--body);font-weight:600;margin-left:3px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:13px;padding:3px 9px;border-radius:999px;font-weight:600;display:inline-flex;gap:5px;align-items:center}
+.chip.ok{background:var(--ok-bg);color:var(--ok)}
+.chip.soon{background:var(--soon-bg);color:var(--soon)}
+.chip.late{background:var(--late-bg);color:var(--late)}
+.chip.none{background:var(--surface-2);color:var(--muted)}
+.chip.alt{background:var(--surface-2);color:var(--fg);font-family:var(--mono);font-weight:500}
+.chip.alt button{min-height:0;padding:0 2px;border:0;background:none;color:var(--muted);font-size:15px;line-height:1}
+.tag{font-size:11px;letter-spacing:.08em;text-transform:uppercase;background:var(--accent);color:var(--accent-ink);padding:2px 7px;border-radius:4px;font-weight:700}
+.oils{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.oil{background:var(--surface-2);border-radius:8px;padding:8px 10px;min-width:0}
+.oil .v{font-weight:600;overflow-wrap:anywhere}
+.section{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:12px}
+.svc{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:8px}
+.svc:first-of-type{border-top:0;padding-top:0}
+.svc-head{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.bar{height:8px;background:var(--surface-2);border-radius:4px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:4px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row > *{flex:0 0 auto}
+.spacer{flex:1 1 auto}
+.back{align-self:flex-start}
+.hourbox{display:flex;gap:8px;align-items:flex-end}
+.hourbox .field{flex:1}
+.hist{display:flex;flex-direction:column;gap:6px;font-size:14px}
+.hist div{display:grid;grid-template-columns:86px 70px 1fr;gap:8px}
+.lookup{background:var(--surface-2);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:8px;font-size:14px}
+.lookup table{border-collapse:collapse;width:100%}
+.lookup td{padding:3px 6px 3px 0;vertical-align:top;border-bottom:1px solid var(--line)}
+.lookup td:first-child{color:var(--muted);width:40%}
+.warn{font-size:13px;color:var(--soon)}
+.fab{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:5;box-shadow:0 4px 14px rgba(0,0,0,.25);font-size:17px;padding:12px 18px}
+.empty{text-align:center;padding:20px;color:var(--muted)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(80px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:8px;font-weight:600;z-index:20}
+.note{font-size:13px;color:var(--muted)}
+.confirm{background:var(--late-bg);color:var(--late);padding:10px;border-radius:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+@media (prefers-reduced-motion: no-preference){.bar i{transition:width .3s}}
+</style>
+
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<button class="primary fab" id="fab" type="button">+ Maszyna</button>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const today = () => new Date().toISOString().slice(0,10);
+const fmtDate = d => d ? d.split("-").reverse().join(".") : "—";
+const num = v => (v === "" || v == null || isNaN(+v)) ? null : +v;
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+
+const DEFAULT_ITEMS = [
+  ["Olej silnikowy",500,12],["Filtr oleju silnikowego",500,12],["Filtr paliwa",500,12],
+  ["Filtr powietrza",1000,24],["Olej hydrauliczny",2000,24],["Filtr hydrauliczny",1000,24]
+];
+const newItem = (name="", intH=500, intMo=12) => ({id:uid(), name, filter:"", intH, intMo, warn:50, lastH:null, lastDate:"", alts:[]});
+const newMachine = () => ({id:uid(), name:"", model:"", hours:0, hoursDate:today(),
+  engOil:{type:"",liters:null}, hydOil:{type:"",liters:null}, notes:"",
+  items: DEFAULT_ITEMS.map(a=>newItem(...a)), history:[]});
+
+const EXAMPLE = {id:"__example", example:true, name:"Koparka JCB 3CX", model:"2016, silnik JCB 4.4", hours:6420, hoursDate:today(),
+  engOil:{type:"15W-40 API CI-4", liters:15}, hydOil:{type:"HV 46", liters:80}, notes:"",
+  items:[
+    {...newItem("Olej silnikowy",500,12), lastH:6000, lastDate:"2026-05-10"},
+    {...newItem("Filtr oleju silnikowego",500,12), filter:"JCB 320/04133", lastH:6000, lastDate:"2026-05-10", alts:["Mann W 950/26","Fleetguard LF16015"]},
+    {...newItem("Filtr paliwa",500,12), filter:"JCB 32/925869", lastH:5500, lastDate:"2025-11-02"},
+    {...newItem("Olej hydrauliczny",2000,24), lastH:5000, lastDate:"2025-03-15"}],
+  history:[{date:"2026-05-10",hours:6000,what:"Olej silnikowy + filtr oleju",note:""}]};
+
+/* ---------- storage: db (konto) z zapasem w pamięci przeglądarki ---------- */
+const LS = "serwis-maszyn-v1";
+let machines = [], mode = "local", col = null, loaded = false;
+function lsLoad(){ try{ return JSON.parse(localStorage.getItem(LS)||"[]"); }catch(e){ return []; } }
+function lsSave(){ try{ localStorage.setItem(LS, JSON.stringify(machines)); }catch(e){} }
+async function persist(m){
+  if (mode === "db") { try { await col.doc(m.id).set(JSON.parse(JSON.stringify(m))); } catch(e){ toast("Nie zapisano: " + (e.message||e.code||"błąd")); } }
+  else lsSave();
+}
+async function removeM(id){
+  machines = machines.filter(x=>x.id!==id);
+  if (mode === "db") { try{ await col.doc(id).delete(); }catch(e){ toast("Nie usunięto"); } } else lsSave();
+}
+async function initStore(){
+  machines = lsLoad(); loaded = true; render();
+  try{
+    const c = window.claude; if(!c?.use) return;
+    const [db, user] = await Promise.all([c.use("db"), c.use("user")]);
+    if(!db || !user) return;
+    const id = await user.id(); if(!id) return;
+    col = db.collection("data/users/" + id);
+    const snap = await col.get();
+    const remote = snap.docs.map(d=>d.data()).filter(Boolean);
+    mode = "db";
+    if(!remote.length && machines.length){ for(const m of machines) await persist(m); }
+    else machines = remote;
+    lsSave(); render();
+    col.onSnapshot(s => { machines = s.docs.map(d=>d.data()).filter(Boolean); lsSave(); if(!editing) render(); });
+  }catch(e){ /* zostaje pamięć przeglądarki */ }
+}
+
+/* ---------- obliczenia ---------- */
+function addMonths(d, n){ const x = new Date(d+"T12:00:00"); x.setMonth(x.getMonth()+n); return x; }
+function calc(m, it){
+  const r = {state:"none", remH:null, dueH:null, days:null, dueDate:null, pct:0};
+  const hasH = it.intH && it.lastH != null, hasD = it.intMo && it.lastDate;
+  if(!hasH && !hasD) return r;
+  const warn = it.warn != null ? it.warn : Math.round((it.intH||0)*0.1);
+  let late=false, soon=false;
+  if(hasH){ r.dueH = it.lastH + it.intH; r.remH = r.dueH - m.hours; r.pct = Math.min(100, Math.max(0,(m.hours-it.lastH)/it.intH*100));
+    if(r.remH < 0) late = true; else if(r.remH <= warn) soon = true; }
+  if(hasD){ r.dueDate = addMonths(it.lastDate, it.intMo); r.days = Math.round((r.dueDate - new Date())/864e5);
+    if(r.days < 0) late = true; else if(r.days <= 30) soon = true;
+    if(!hasH){ const tot = it.intMo*30.4; r.pct = Math.min(100, Math.max(0,(tot - r.days)/tot*100)); } }
+  r.state = late ? "late" : soon ? "soon" : "ok";
+  return r;
+}
+function dueText(r){
+  const p = [];
+  if(r.remH != null) p.push(r.remH < 0 ? `po terminie o ${-r.remH} mth` : `za ${r.remH} mth (przy ${r.dueH})`);
+  if(r.days != null) p.push(r.days < 0 ? `${-r.days} dni po terminie` : `do ${r.dueDate.toLocaleDateString("pl-PL")}`);
+  return p.join(" · ") || "brak danych o ostatniej wymianie";
+}
+const STATE_TXT = {ok:"OK", soon:"Zbliża się", late:"Do wymiany", none:"Brak danych"};
+const color = s => ({ok:"var(--ok)",soon:"var(--soon)",late:"var(--late)",none:"var(--line)"}[s]);
+function worst(m){ const o={late:3,soon:2,ok:1,none:0}; return m.items.map(i=>calc(m,i).state).sort((a,b)=>o[b]-o[a])[0]||"none"; }
+
+/* ---------- widoki ---------- */
+let view = {name:"list"}, editing = false;
+function go(v){ view = v; editing = v.name === "edit"; render(); window.scrollTo(0,0); }
+function toast(t){ const el=$("#toast"); el.textContent=t; el.hidden=false; clearTimeout(toast.t); toast.t=setTimeout(()=>el.hidden=true,2600); }
+
+function syncNative(){
+  if(!window.Android || !loaded) return;
+  const out=[];
+  for(const m of machines) for(const it of m.items){ const r=calc(m,it); if(r.state==="none") continue;
+    out.push({m:m.name, n:it.name, remH:r.remH, warn:it.warn!=null?it.warn:Math.round((it.intH||0)*0.1),
+      due:r.dueDate?r.dueDate.toISOString().slice(0,10):null}); }
+  try{ Android.saveSchedule(JSON.stringify(out)); }catch(e){}
+}
+function render(){
+  syncNative();
+  $("#fab").hidden = view.name !== "list";
+  if(view.name==="list") return renderList();
+  const m = view.id==="__example" ? EXAMPLE : machines.find(x=>x.id===view.id);
+  if(view.name==="edit") return renderEdit(view.draft);
+  if(!m){ go({name:"list"}); return; }
+  renderDetail(m);
+}
+
+function renderList(){
+  const list = machines.length ? machines : (loaded ? [EXAMPLE] : []);
+  const alerts = [];
+  for(const m of machines) for(const it of m.items){ const r = calc(m,it); if(r.state==="late"||r.state==="soon") alerts.push({m,it,r}); }
+  alerts.sort((a,b)=>(a.r.state==="late"?0:1)-(b.r.state==="late"?0:1));
+  $("#app").innerHTML = `
+  <header class="top"><div><h1>Książka serwisowa</h1><div class="sub">${machines.length} ${machines.length===1?"maszyna":"maszyn(y)"} · zapis ${mode==="db"?"na Twoim koncie":"w tym telefonie"}</div></div></header>
+  ${alerts.length ? `<div class="alerts">${alerts.map(a=>`<button class="alert ${a.r.state}" data-open="${a.m.id}" type="button">
+      <span>${a.r.state==="late"?"⚠":"⏱"}</span><span><b>${esc(a.m.name)}</b> — ${esc(a.it.name)}: ${esc(dueText(a.r))}</span></button>`).join("")}</div>` : ""}
+  ${!machines.length && loaded ? `<p class="note">Przykładowa maszyna poniżej pokazuje, jak to działa. Dodaj swoją przyciskiem „+ Maszyna”.</p>` : ""}
+  <div class="cards">${list.map(cardHTML).join("")}</div>
+  <details class="section"><summary class="label" style="cursor:pointer">Kopia zapasowa</summary>
+    <div class="backup">
+      <p class="note">Dane są zapisane tylko w tym telefonie. Wyślij sobie kopię (mail, WhatsApp, Dysk), żeby ich nie stracić przy zmianie telefonu.</p>
+      <button type="button" id="bkExport">Wyślij kopię zapasową</button>
+      <label class="label" for="bkText">Wczytaj kopię — wklej tekst kopii</label>
+      <textarea id="bkText" placeholder='[{"id":...}]'></textarea>
+      <button type="button" id="bkImport">Wczytaj kopię</button>
+    </div></details>`;
+  $("#bkExport").onclick = async ()=>{ const txt = JSON.stringify(machines);
+    if(window.Android){ try{ Android.share(txt); return; }catch(e){} }
+    try{ await navigator.clipboard.writeText(txt); toast("Skopiowano kopię do schowka"); }catch(e){ $("#bkText").value = txt; $("#bkText").select(); toast("Zaznaczono tekst kopii — skopiuj go"); } };
+  $("#bkImport").onclick = async ()=>{ let data; try{ data = JSON.parse($("#bkText").value); }catch(e){ toast("To nie jest poprawna kopia"); return; }
+    if(!Array.isArray(data) || data.some(m=>!m || !m.id || !Array.isArray(m.items))){ toast("To nie jest poprawna kopia"); return; }
+    const b = $("#bkImport");
+    if(!b.dataset.ok){ b.dataset.ok=1; b.textContent=`Zastąpić obecne dane (${data.length} maszyn)?`; return; }
+    machines = data; for(const m of machines) await persist(m); lsSave(); toast("Wczytano kopię"); render(); };
+  document.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>go({name:"detail",id:b.dataset.open}));
+}
+function cardHTML(m){
+  const counts = {late:0,soon:0,ok:0};
+  m.items.forEach(i=>{ const s=calc(m,i).state; if(counts[s]!=null) counts[s]++; });
+  return `<button class="card ${m.example?"example":""}" data-open="${m.id}" type="button">
+    <div class="card-head"><div><h3>${esc(m.name)||"Bez nazwy"} ${m.example?'<span class="tag">Przykład</span>':""}</h3><div class="muted" style="font-size:14px">${esc(m.model)}</div></div>
+    <div class="hours">${m.hours}<small>mth</small></div></div>
+    <div class="chips">${counts.late?`<span class="chip late">${counts.late} do wymiany</span>`:""}${counts.soon?`<span class="chip soon">${counts.soon} zbliża się</span>`:""}${counts.ok?`<span class="chip ok">${counts.ok} OK</span>`:""}</div>
+    <div class="oils">${oilHTML("Olej silnikowy",m.engOil)}${oilHTML("Olej hydrauliczny",m.hydOil)}</div>
+  </button>`;
+}
+const oilHTML = (l,o) => `<div class="oil"><div class="label">${l}</div><div class="v">${esc(o?.type)||"—"}</div><div class="num muted">${o?.liters!=null?o.liters+" l":""}</div></div>`;
+
+let lookupState = {};
+function renderDetail(m){
+  const ex = !!m.example;
+  $("#app").innerHTML = `
+  <button class="ghost back" id="back" type="button">← Wszystkie maszyny</button>
+  <header class="top"><div><h1>${esc(m.name)||"Bez nazwy"}</h1><div class="sub">${esc(m.model)}</div></div>
+    ${ex?'<span class="tag">Przykład</span>':`<button class="small" id="edit" type="button">Edytuj</button>`}</header>
+
+  <div class="section">
+    <div class="hourbox"><div class="field"><label class="label" for="hrs">Licznik teraz (mth)</label>
+      <input id="hrs" class="num" type="number" inputmode="numeric" value="${m.hours}" ${ex?"disabled":""}></div>
+      <button class="small" id="minus" type="button" ${ex?"disabled":""}>−10</button>
+      <button class="small" id="plus" type="button" ${ex?"disabled":""}>+10</button>
+      <button class="primary" id="saveH" type="button" ${ex?"disabled":""}>Zapisz</button></div>
+    <div class="note">Ostatnio wpisano ${fmtDate(m.hoursDate)}</div>
+    <div class="oils">${oilHTML("Olej silnikowy",m.engOil)}${oilHTML("Olej hydrauliczny",m.hydOil)}</div>
+    ${m.notes?`<div class="note">${esc(m.notes)}</div>`:""}
+  </div>
+
+  <div class="section"><h2>Wymiany</h2>
+    ${m.items.map(it=>svcHTML(m,it,ex)).join("") || '<div class="empty">Brak pozycji. Dodaj je w „Edytuj”.</div>'}
+  </div>
+
+  <div class="section"><h2>Historia</h2>
+    <div class="hist">${(m.history||[]).slice().reverse().map(h=>`<div><span class="num">${fmtDate(h.date)}</span><span class="num">${h.hours} mth</span><span>${esc(h.what)}${h.note?` <span class="muted">— ${esc(h.note)}</span>`:""}</span></div>`).join("") || '<span class="muted">Jeszcze nic nie zapisano.</span>'}</div>
+  </div>`;
+  $("#back").onclick = ()=>go({name:"list"});
+  if(ex) return;
+  $("#edit").onclick = ()=>go({name:"edit", draft:JSON.parse(JSON.stringify(m))});
+  const hrs = $("#hrs");
+  $("#minus").onclick = ()=>hrs.value = Math.max(0,(+hrs.value||0)-10);
+  $("#plus").onclick = ()=>hrs.value = (+hrs.value||0)+10;
+  $("#saveH").onclick = async ()=>{ const v=num(hrs.value); if(v==null||v<0){toast("Wpisz liczbę motogodzin");return;}
+    if(v < m.hours && !$("#saveH").dataset.ok){ $("#saveH").dataset.ok=1; $("#saveH").textContent="Mniej niż było — zapisać?"; return; }
+    m.hours=v; m.hoursDate=today(); await persist(m); toast("Zapisano licznik: "+v+" mth"); render(); };
+  document.querySelectorAll("[data-done]").forEach(b=>b.onclick=async()=>{
+    const it = m.items.find(i=>i.id===b.dataset.done);
+    if(!b.dataset.ok){ b.dataset.ok=1; b.textContent=`Potwierdź: ${m.hours} mth, dziś`; return; }
+    it.lastH = m.hours; it.lastDate = today();
+    (m.history ||= []).push({date:today(), hours:m.hours, what:it.name + (it.filter?` (${it.filter})`:""), note:""});
+    await persist(m); toast("Zapisano wymianę: "+it.name); render(); });
+  document.querySelectorAll("[data-lookup]").forEach(b=>b.onclick=()=>lookup(m, m.items.find(i=>i.id===b.dataset.lookup)));
+  document.querySelectorAll("[data-addalt]").forEach(b=>b.onclick=async()=>{
+    const it = m.items.find(i=>i.id===b.dataset.addalt); const v = b.dataset.val;
+    if(!it.alts.includes(v)){ it.alts.push(v); await persist(m); } toast("Dodano zamiennik "+v); render(); });
+  document.querySelectorAll("[data-altinput]").forEach(inp=>{
+    const btn = inp.nextElementSibling;
+    btn.onclick = async()=>{ const v=inp.value.trim(); if(!v) return; const it=m.items.find(i=>i.id===inp.dataset.altinput);
+      if(!it.alts.includes(v)) it.alts.push(v); await persist(m); render(); };
+  });
+  document.querySelectorAll("[data-rmalt]").forEach(b=>b.onclick=async()=>{
+    const [iid,idx] = b.dataset.rmalt.split(":"); const it=m.items.find(i=>i.id===iid); it.alts.splice(+idx,1); await persist(m); render(); });
+}
+function svcHTML(m,it,ex){
+  const r = calc(m,it), L = lookupState[it.id];
+  return `<div class="svc">
+    <div class="svc-head"><div><h3>${esc(it.name)}</h3>
+      <div class="note">co ${it.intH?it.intH+" mth":""}${it.intH&&it.intMo?" lub ":""}${it.intMo?it.intMo+" mies.":""} · ostrzeżenie ${it.warn??"—"} mth przed</div></div>
+      <span class="chip ${r.state}">${STATE_TXT[r.state]}</span></div>
+    <div class="bar"><i style="width:${r.pct}%;background:${color(r.state)}"></i></div>
+    <div style="font-size:14px">${esc(dueText(r))}</div>
+    <div class="note">Ostatnio: ${it.lastH!=null?`<span class="num">${it.lastH} mth</span>`:"—"}, ${fmtDate(it.lastDate)}</div>
+    ${it.filter||it.alts.length||/filtr/i.test(it.name) ? `
+      <div class="row"><span class="label">Filtr</span><span class="num">${esc(it.filter)||"—"}</span></div>
+      ${it.alts.length?`<div class="chips">${it.alts.map((a,i)=>`<span class="chip alt">${esc(a)}${ex?"":`<button type="button" aria-label="Usuń ${esc(a)}" data-rmalt="${it.id}:${i}">×</button>`}</span>`).join("")}</div>`:""}
+      ${ex?"":`<div class="row" style="flex-wrap:nowrap"><input data-altinput="${it.id}" placeholder="Dopisz zamiennik, np. Mann W 712/75" style="flex:1 1 auto;min-width:0"><button class="small" type="button">Dodaj</button></div>
+      ${it.filter?`<button class="small" type="button" data-lookup="${it.id}" ${L?.loading?"disabled":""}>${L?.loading?"Szukam…":(window.Android?"🔍 Szukaj zamienników w Google":"🔍 Znajdź zamienniki i parametry")}</button>`:`<div class="note">Wpisz numer filtra w „Edytuj”, żeby wyszukać zamienniki.</div>`}`}
+      ${L?.result?lookupHTML(it,L.result):""}${L?.error?`<div class="warn">${esc(L.error)}</div>`:""}`:""}
+    ${ex?"":`<button class="primary small" type="button" data-done="${it.id}" style="align-self:flex-start">✓ Wymieniono teraz</button>`}
+  </div>`;
+}
+function lookupHTML(it,res){
+  return `<div class="lookup">
+    ${res.opis?`<div><b>${esc(res.opis)}</b></div>`:""}
+    ${(res.parametry||[]).length?`<table>${res.parametry.map(p=>`<tr><td>${esc(p.nazwa)}</td><td class="num">${esc(p.wartosc)}</td></tr>`).join("")}</table>`:""}
+    ${(res.zamienniki||[]).length?`<div class="label">Możliwe zamienniki</div>${res.zamienniki.map(z=>{const v=`${z.marka} ${z.numer}`.trim();
+      return `<div class="row" style="flex-wrap:nowrap"><span class="num" style="flex:1 1 auto;min-width:0">${esc(v)}${z.uwagi?` <span class="muted">— ${esc(z.uwagi)}</span>`:""}</span>
+      ${it.alts.includes(v)?'<span class="chip ok">dodany</span>':`<button class="small" type="button" data-addalt="${it.id}" data-val="${esc(v)}">+ Zapisz</button>`}</div>`}).join("")}`:"<div>Nie znaleziono zamienników.</div>"}
+    <div class="warn">Pewność: ${esc(res.pewnosc||"nieznana")}. Przed zakupem sprawdź w katalogu producenta (wymiary, gwint, zawór).</div>
+  </div>`;
+}
+async function lookup(m,it){
+  if(window.Android){ try{ Android.openUrl("https://www.google.com/search?q="+encodeURIComponent(it.filter+" zamiennik filtr "+(m.name||""))); }catch(e){} return; }
+  lookupState[it.id] = {loading:true}; render();
+  try{
+    const sample = await window.claude?.use?.("sample");
+    if(!sample) throw new Error("Wyszukiwanie niedostępne w tym widoku. Otwórz aplikację w Claude i zaloguj się.");
+    const res = await sample.json(
+`Jesteś specjalistą od filtrów do maszyn budowlanych, rolniczych i ciężarówek.
+Maszyna: ${m.name} ${m.model}. Pozycja: ${it.name}. Numer filtra: ${it.filter}.
+Znane już zamienniki: ${it.alts.join(", ")||"brak"}.
+Podaj parametry tego filtra (typ, wysokość, średnica zewn., gwint lub średnice uszczelki, zawór obejściowy/zwrotny, dokładność filtracji – tylko to, co wiesz) oraz zamienniki innych marek (Mann, Fleetguard, Donaldson, Hifi, WIX, Baldwin, Filtron itp.).
+Nie zgaduj numerów — jeśli nie jesteś pewien, podaj mniej pozycji i obniż pewność.
+Odpowiedz wyłącznie JSON po polsku w kształcie:
+{"opis":"krótki opis","parametry":[{"nazwa":"","wartosc":""}],"zamienniki":[{"marka":"","numer":"","uwagi":""}],"pewnosc":"wysoka|średnia|niska"}`, {modelTier:"complex"});
+    lookupState[it.id] = {result:res};
+  }catch(e){
+    lookupState[it.id] = {error: e.code==="not_granted" ? "Nie zezwolono na wyszukiwanie." : e.code==="rate_limited" ? "Za dużo zapytań — spróbuj za chwilę." : (e.message||"Nie udało się wyszukać.")};
+  }
+  render();
+}
+
+function renderEdit(d){
+  const isNew = !machines.some(x=>x.id===d.id);
+  $("#app").innerHTML = `
+  <button class="ghost back" id="cancel" type="button">← Anuluj</button>
+  <header class="top"><h1>${isNew?"Nowa maszyna":"Edycja"}</h1></header>
+  <div class="section">
+    <div class="field"><label class="label" for="f-name">Nazwa / sprzęt</label><input id="f-name" value="${esc(d.name)}" placeholder="np. Ładowarka Volvo L60"></div>
+    <div class="grid2"><div class="field"><label class="label" for="f-model">Model, rok, silnik</label><input id="f-model" value="${esc(d.model)}"></div>
+    <div class="field"><label class="label" for="f-hours">Licznik (mth)</label><input id="f-hours" class="num" type="number" inputmode="numeric" value="${d.hours}"></div></div>
+    <h3>Olej silnikowy</h3>
+    <div class="grid2"><div class="field"><label class="label" for="f-eo">Rodzaj</label><input id="f-eo" value="${esc(d.engOil.type)}" placeholder="np. 10W-40 E7"></div>
+    <div class="field"><label class="label" for="f-eol">Ilość (l)</label><input id="f-eol" class="num" type="number" inputmode="decimal" step="0.1" value="${d.engOil.liters??""}"></div></div>
+    <h3>Olej hydrauliczny</h3>
+    <div class="grid2"><div class="field"><label class="label" for="f-ho">Rodzaj</label><input id="f-ho" value="${esc(d.hydOil.type)}" placeholder="np. HV 46"></div>
+    <div class="field"><label class="label" for="f-hol">Ilość (l)</label><input id="f-hol" class="num" type="number" inputmode="decimal" step="0.1" value="${d.hydOil.liters??""}"></div></div>
+    <div class="field"><label class="label" for="f-notes">Notatki</label><textarea id="f-notes">${esc(d.notes)}</textarea></div>
+  </div>
+  <div class="section"><h2>Pozycje serwisowe</h2>
+    <p class="note">Interwał w motogodzinach i/lub miesiącach. „Ostrzeż przed” to zapas (±) — ile mth wcześniej pokazać przypomnienie.</p>
+    ${d.items.map((it,i)=>`<div class="svc" data-i="${i}">
+      <div class="row" style="flex-wrap:nowrap"><input id="i-name-${it.id}" data-k="name" value="${esc(it.name)}" placeholder="Nazwa" style="flex:1 1 auto;min-width:0;font-weight:600">
+        <button class="small danger" type="button" data-del="${i}" aria-label="Usuń pozycję">Usuń</button></div>
+      <div class="field"><label class="label" for="i-filter-${it.id}">Numer filtra (jeśli dotyczy)</label><input id="i-filter-${it.id}" data-k="filter" class="num" value="${esc(it.filter)}" placeholder="np. Mann W 940/25"></div>
+      <div class="grid3">
+        <div class="field"><label class="label" for="i-intH-${it.id}">Co (mth)</label><input id="i-intH-${it.id}" data-k="intH" class="num" type="number" inputmode="numeric" value="${it.intH??""}"></div>
+        <div class="field"><label class="label" for="i-intMo-${it.id}">Lub co (mies.)</label><input id="i-intMo-${it.id}" data-k="intMo" class="num" type="number" inputmode="numeric" value="${it.intMo??""}"></div>
+        <div class="field"><label class="label" for="i-warn-${it.id}">Ostrzeż przed (mth)</label><input id="i-warn-${it.id}" data-k="warn" class="num" type="number" inputmode="numeric" value="${it.warn??""}"></div>
+        <div class="field"><label class="label" for="i-lastH-${it.id}">Ostatnio przy (mth)</label><input id="i-lastH-${it.id}" data-k="lastH" class="num" type="number" inputmode="numeric" value="${it.lastH??""}"></div>
+        <div class="field" style="grid-column:span 2"><label class="label" for="i-lastDate-${it.id}">Data ostatniej wymiany</label><input id="i-lastDate-${it.id}" data-k="lastDate" type="date" value="${esc(it.lastDate)}"></div>
+      </div></div>`).join("")}
+    <button type="button" id="addItem">+ Dodaj pozycję</button>
+  </div>
+  <div class="row"><button class="primary" type="button" id="save">Zapisz maszynę</button><span class="spacer"></span>
+    ${isNew?"":`<button class="danger" type="button" id="delM">Usuń maszynę</button>`}</div>
+  <div id="delBox"></div>`;
+  const read = () => {
+    d.name=$("#f-name").value.trim(); d.model=$("#f-model").value.trim(); d.hours=num($("#f-hours").value)??0;
+    d.engOil={type:$("#f-eo").value.trim(), liters:num($("#f-eol").value)};
+    d.hydOil={type:$("#f-ho").value.trim(), liters:num($("#f-hol").value)};
+    d.notes=$("#f-notes").value;
+    document.querySelectorAll(".svc[data-i]").forEach(row=>{ const it=d.items[+row.dataset.i];
+      row.querySelectorAll("[data-k]").forEach(inp=>{ const k=inp.dataset.k;
+        it[k] = ["intH","intMo","warn","lastH"].includes(k) ? num(inp.value) : inp.value.trim(); }); });
+  };
+  $("#cancel").onclick = ()=> isNew ? go({name:"list"}) : go({name:"detail",id:d.id});
+  $("#addItem").onclick = ()=>{ read(); d.items.push(newItem("",500,12)); renderEdit(d); };
+  document.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{ read(); d.items.splice(+b.dataset.del,1); renderEdit(d); });
+  $("#save").onclick = async ()=>{ read(); if(!d.name){ toast("Wpisz nazwę maszyny"); $("#f-name").focus(); return; }
+    const old = machines.find(x=>x.id===d.id); if(!old || old.hours!==d.hours) d.hoursDate=today();
+    const i = machines.findIndex(x=>x.id===d.id); if(i>=0) machines[i]=d; else machines.push(d);
+    await persist(d); toast("Zapisano"); go({name:"detail",id:d.id}); };
+  if(!isNew) $("#delM").onclick = ()=>{ $("#delBox").innerHTML = `<div class="confirm">Usunąć „${esc(d.name)}” z całą historią?<span class="spacer"></span><button class="danger small" id="delYes" type="button">Tak, usuń</button><button class="small" id="delNo" type="button">Nie</button></div>`;
+    $("#delYes").onclick = async()=>{ await removeM(d.id); toast("Usunięto"); go({name:"list"}); };
+    $("#delNo").onclick = ()=>$("#delBox").innerHTML=""; };
+}
+
+window.appBack = () => {
+  if(view.name==="edit"){ const d=view.draft; go(machines.some(x=>x.id===d.id)?{name:"detail",id:d.id}:{name:"list"}); return true; }
+  if(view.name==="detail"){ go({name:"list"}); return true; }
+  return false;
+};
+$("#fab").onclick = ()=>go({name:"edit", draft:newMachine()});
+initStore();
+})();
+</script>
+</body>
+</html>
