@@ -131,9 +131,21 @@ const num = v => (v === "" || v == null || isNaN(+v)) ? null : +v;
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
 
 const DEFAULT_ITEMS = [
-  ["Olej silnikowy",500,12],["Filtr oleju silnikowego",500,12],["Filtr paliwa",500,12],
+  ["Olej silnikowy + filtr oleju",500,12],["Filtr paliwa",500,12],
   ["Filtr powietrza",1000,24],["Olej hydrauliczny",2000,24],["Filtr hydrauliczny",1000,24]
 ];
+function mergeOil(m){
+  if(!m || !Array.isArray(m.items)) return false;
+  const oil = m.items.find(i=>/^olej silnikowy$/i.test((i.name||"").trim()));
+  const flt = m.items.find(i=>/^filtr oleju( silnikowego)?$/i.test((i.name||"").trim()));
+  if(!oil || !flt) return false;
+  oil.name = "Olej silnikowy + filtr oleju";
+  if(!oil.filter) oil.filter = flt.filter || "";
+  oil.alts = [...new Set([...(oil.alts||[]), ...(flt.alts||[])])];
+  if(oil.lastH == null || (flt.lastH != null && flt.lastH > oil.lastH)){ oil.lastH = flt.lastH; oil.lastDate = flt.lastDate || oil.lastDate; }
+  m.items = m.items.filter(i=>i!==flt);
+  return true;
+}
 const newItem = (name="", intH=500, intMo=12) => ({id:uid(), name, filter:"", intH, intMo, warn:50, lastH:null, lastDate:"", alts:[]});
 const newMachine = () => ({id:uid(), name:"", model:"", hours:0, hoursDate:today(),
   engOil:{type:"",liters:null}, hydOil:{type:"",liters:null}, notes:"",
@@ -142,8 +154,7 @@ const newMachine = () => ({id:uid(), name:"", model:"", hours:0, hoursDate:today
 const EXAMPLE = {id:"__example", example:true, name:"Koparka JCB 3CX", model:"2016, silnik JCB 4.4", hours:6420, hoursDate:today(),
   engOil:{type:"15W-40 API CI-4", liters:15}, hydOil:{type:"HV 46", liters:80}, notes:"",
   items:[
-    {...newItem("Olej silnikowy",500,12), lastH:6000, lastDate:"2026-05-10"},
-    {...newItem("Filtr oleju silnikowego",500,12), filter:"JCB 320/04133", lastH:6000, lastDate:"2026-05-10", alts:["Mann W 950/26","Fleetguard LF16015"]},
+    {...newItem("Olej silnikowy + filtr oleju",500,12), filter:"JCB 320/04133", lastH:6000, lastDate:"2026-05-10", alts:["Mann W 950/26","Fleetguard LF16015"]},
     {...newItem("Filtr paliwa",500,12), filter:"JCB 32/925869", lastH:5500, lastDate:"2025-11-02"},
     {...newItem("Olej hydrauliczny",2000,24), lastH:5000, lastDate:"2025-03-15"}],
   history:[{date:"2026-05-10",hours:6000,what:"Olej silnikowy + filtr oleju",note:""}]};
@@ -181,7 +192,7 @@ async function removeM(id){
   if (mode === "db") { try{ await col.doc(id).delete(); }catch(e){ toast("Nie usunięto"); } } else lsSave();
 }
 async function initStore(){
-  machines = lsLoad(); loaded = true; render();
+  machines = lsLoad(); if(machines.map(mergeOil).some(Boolean)) lsSave(); loaded = true; render();
   try{
     const c = window.claude; if(!c?.use) return;
     const [db, user] = await Promise.all([c.use("db"), c.use("user")]);
@@ -192,7 +203,7 @@ async function initStore(){
     const remote = snap.docs.map(d=>d.data()).filter(Boolean);
     mode = "db";
     if(!remote.length && machines.length){ for(const m of machines) await persist(m); }
-    else machines = remote;
+    else { machines = remote; for(const m of machines) if(mergeOil(m)) await persist(m); }
     lsSave(); render();
     col.onSnapshot(s => { machines = s.docs.map(d=>d.data()).filter(Boolean); lsSave(); if(!editing) render(); });
   }catch(e){ /* zostaje pamięć przeglądarki */ }
@@ -345,6 +356,8 @@ function renderDetail(m){
   document.querySelectorAll("[data-rmalt]").forEach(b=>b.onclick=async()=>{
     const [iid,idx] = b.dataset.rmalt.split(":"); const it=m.items.find(i=>i.id===iid); it.alts.splice(+idx,1); await persist(m); render(); });
 }
+function oilFor(m,it){ const n=(it.name||"").toLowerCase();
+  if(n.includes("olej silnik")) return m.engOil; if(n.includes("olej hydraul")) return m.hydOil; return null; }
 function svcHTML(m,it,ex){
   const r = calc(m,it), L = lookupState[it.id];
   return `<div class="svc">
@@ -353,6 +366,7 @@ function svcHTML(m,it,ex){
       <span class="chip ${r.state}">${STATE_TXT[r.state]}</span></div>
     <div class="bar"><i style="width:${r.pct}%;background:${color(r.state)}"></i></div>
     <div style="font-size:14px">${esc(dueText(r))}</div>
+    ${oilFor(m,it)?`<div class="note">Olej: <b>${esc(oilFor(m,it).type)||"—"}</b>${oilFor(m,it).liters!=null?`, ${oilFor(m,it).liters} l`:""}</div>`:""}
     <div class="note">Ostatnio: ${it.lastH!=null?`<span class="num">${it.lastH} mth</span>`:"—"}, ${fmtDate(it.lastDate)}</div>
     ${it.filter||it.alts.length||/filtr/i.test(it.name) ? `
       <div class="row"><span class="label">Filtr</span><span class="num">${esc(it.filter)||"—"}</span></div>
