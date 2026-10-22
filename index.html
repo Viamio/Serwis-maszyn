@@ -31,6 +31,12 @@
 html,body{margin:0}
 body{-webkit-text-size-adjust:100%}
 .backup{display:flex;flex-direction:column;gap:8px}
+.picks{display:flex;flex-wrap:wrap;gap:6px}
+.pick{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;background:var(--surface-2);overflow:hidden}
+.pick button{min-height:34px;border:0;border-radius:0;background:none;padding:4px 10px;font-size:14px;font-weight:600}
+.pick button.x{padding:4px 9px 4px 2px;color:var(--muted);font-size:16px}
+.update{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--accent);color:var(--accent-ink);padding:10px 12px;border-radius:8px;font-weight:600}
+.update button{background:var(--surface);color:var(--fg);border-color:var(--surface)}
 
 body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.45;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px 96px}
@@ -144,6 +150,25 @@ const EXAMPLE = {id:"__example", example:true, name:"Koparka JCB 3CX", model:"20
 
 /* ---------- storage: db (konto) z zapasem w pamięci przeglądarki ---------- */
 const LS = "serwis-maszyn-v1";
+const LS_OILS = "serwis-oleje-v1";
+let oils = null; // {eng:[], hyd:[]}
+function oilsLoad(){
+  if(oils) return oils;
+  try{ oils = JSON.parse(localStorage.getItem(LS_OILS)||"null"); }catch(e){ oils = null; }
+  if(!oils || !Array.isArray(oils.eng) || !Array.isArray(oils.hyd)){
+    oils = {eng:[], hyd:[]};
+    for(const m of machines){ oilsAdd("eng", m.engOil?.type, false); oilsAdd("hyd", m.hydOil?.type, false); }
+    oilsSave();
+  }
+  return oils;
+}
+function oilsSave(){ try{ localStorage.setItem(LS_OILS, JSON.stringify(oils)); }catch(e){} }
+function oilsAdd(kind, v, save=true){
+  v = (v||"").trim(); if(!v) return;
+  const list = (oils ||= {eng:[],hyd:[]})[kind];
+  const i = list.findIndex(x=>x.toLowerCase()===v.toLowerCase()); if(i>=0) list.splice(i,1);
+  list.unshift(v); if(save) oilsSave();
+}
 let machines = [], mode = "local", col = null, loaded = false;
 function lsLoad(){ try{ return JSON.parse(localStorage.getItem(LS)||"[]"); }catch(e){ return []; } }
 function lsSave(){ try{ localStorage.setItem(LS, JSON.stringify(machines)); }catch(e){} }
@@ -228,6 +253,7 @@ function renderList(){
   for(const m of machines) for(const it of m.items){ const r = calc(m,it); if(r.state==="late"||r.state==="soon") alerts.push({m,it,r}); }
   alerts.sort((a,b)=>(a.r.state==="late"?0:1)-(b.r.state==="late"?0:1));
   $("#app").innerHTML = `
+  ${upd && upd.code > appVer() ? `<div class="update"><span>Nowa wersja aplikacji (1.${upd.code})</span><span class="spacer"></span><button type="button" id="updGo" class="small">${upd.busy?"Pobieranie…":"Aktualizuj"}</button></div>` : ""}
   <header class="top"><div><h1>Książka serwisowa</h1><div class="sub">${machines.length} ${machines.length===1?"maszyna":"maszyn(y)"} · zapis ${mode==="db"?"na Twoim koncie":"w tym telefonie"}</div></div></header>
   ${alerts.length ? `<div class="alerts">${alerts.map(a=>`<button class="alert ${a.r.state}" data-open="${a.m.id}" type="button">
       <span>${a.r.state==="late"?"⚠":"⏱"}</span><span><b>${esc(a.m.name)}</b> — ${esc(a.it.name)}: ${esc(dueText(a.r))}</span></button>`).join("")}</div>` : ""}
@@ -240,7 +266,10 @@ function renderList(){
       <label class="label" for="bkText">Wczytaj kopię — wklej tekst kopii</label>
       <textarea id="bkText" placeholder='[{"id":...}]'></textarea>
       <button type="button" id="bkImport">Wczytaj kopię</button>
-    </div></details>`;
+    </div></details>
+  ${window.Android ? `<div class="section"><div class="row"><div><div class="label">Aplikacja</div><div>Wersja 1.${appVer()}</div><div class="note" id="updMsg">${esc(updMsg)}</div></div><span class="spacer"></span><button type="button" id="updCheck" class="small">Sprawdź aktualizacje</button></div></div>` : ""}`;
+  if($("#updGo")) $("#updGo").onclick = ()=>{ upd.busy = true; render(); try{ Android.downloadUpdate(upd.url); }catch(e){ toast("Nie udało się pobrać"); } };
+  if($("#updCheck")) $("#updCheck").onclick = ()=>{ updMsg = "Sprawdzam…"; render(); checkUpdate(); };
   $("#bkExport").onclick = async ()=>{ const txt = JSON.stringify(machines);
     if(window.Android){ try{ Android.share(txt); return; }catch(e){} }
     try{ await navigator.clipboard.writeText(txt); toast("Skopiowano kopię do schowka"); }catch(e){ $("#bkText").value = txt; $("#bkText").select(); toast("Zaznaczono tekst kopii — skopiuj go"); } };
@@ -365,6 +394,12 @@ Odpowiedz wyłącznie JSON po polsku w kształcie:
   render();
 }
 
+function picksHTML(kind, target){
+  const list = oilsLoad()[kind];
+  return `<datalist id="dl-${kind}">${list.map(o=>`<option value="${esc(o)}"></option>`).join("")}</datalist>
+  ${list.length ? `<div class="label">Zapisane — dotknij, żeby wpisać</div><div class="picks">${list.map((o,i)=>`<span class="pick"><button type="button" data-fill="${target}" data-val="${esc(o)}">${esc(o)}</button><button type="button" class="x" data-unsave="${kind}:${i}" aria-label="Usuń ${esc(o)} z zapisanych">×</button></span>`).join("")}</div>`
+  : `<div class="note">Wpisany olej zapisze się sam, a przy następnej maszynie wybierzesz go jednym dotknięciem.</div>`}`;
+}
 function renderEdit(d){
   const isNew = !machines.some(x=>x.id===d.id);
   $("#app").innerHTML = `
@@ -375,11 +410,13 @@ function renderEdit(d){
     <div class="grid2"><div class="field"><label class="label" for="f-model">Model, rok, silnik</label><input id="f-model" value="${esc(d.model)}"></div>
     <div class="field"><label class="label" for="f-hours">Licznik (mth)</label><input id="f-hours" class="num" type="number" inputmode="numeric" value="${d.hours}"></div></div>
     <h3>Olej silnikowy</h3>
-    <div class="grid2"><div class="field"><label class="label" for="f-eo">Rodzaj</label><input id="f-eo" value="${esc(d.engOil.type)}" placeholder="np. 10W-40 E7"></div>
+    <div class="grid2"><div class="field"><label class="label" for="f-eo">Rodzaj</label><input id="f-eo" list="dl-eng" value="${esc(d.engOil.type)}" placeholder="np. 10W-40 Motul"></div>
     <div class="field"><label class="label" for="f-eol">Ilość (l)</label><input id="f-eol" class="num" type="number" inputmode="decimal" step="0.1" value="${d.engOil.liters??""}"></div></div>
+    ${picksHTML("eng","f-eo")}
     <h3>Olej hydrauliczny</h3>
-    <div class="grid2"><div class="field"><label class="label" for="f-ho">Rodzaj</label><input id="f-ho" value="${esc(d.hydOil.type)}" placeholder="np. HV 46"></div>
+    <div class="grid2"><div class="field"><label class="label" for="f-ho">Rodzaj</label><input id="f-ho" list="dl-hyd" value="${esc(d.hydOil.type)}" placeholder="np. HV 46"></div>
     <div class="field"><label class="label" for="f-hol">Ilość (l)</label><input id="f-hol" class="num" type="number" inputmode="decimal" step="0.1" value="${d.hydOil.liters??""}"></div></div>
+    ${picksHTML("hyd","f-ho")}
     <div class="field"><label class="label" for="f-notes">Notatki</label><textarea id="f-notes">${esc(d.notes)}</textarea></div>
   </div>
   <div class="section"><h2>Pozycje serwisowe</h2>
@@ -409,10 +446,13 @@ function renderEdit(d){
       row.querySelectorAll("[data-k]").forEach(inp=>{ const k=inp.dataset.k;
         it[k] = ["intH","intMo","warn","lastH"].includes(k) ? num(inp.value) : inp.value.trim(); }); });
   };
+  document.querySelectorAll("[data-fill]").forEach(b=>b.onclick=()=>{ const inp=$("#"+b.dataset.fill); inp.value=b.dataset.val; inp.dispatchEvent(new Event("input")); toast("Wpisano: "+b.dataset.val); });
+  document.querySelectorAll("[data-unsave]").forEach(b=>b.onclick=()=>{ read(); const [k,i]=b.dataset.unsave.split(":"); oils[k].splice(+i,1); oilsSave(); renderEdit(d); });
   $("#cancel").onclick = ()=> isNew ? go({name:"list"}) : go({name:"detail",id:d.id});
   $("#addItem").onclick = ()=>{ read(); d.items.push(newItem("",500,12)); renderEdit(d); };
   document.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{ read(); d.items.splice(+b.dataset.del,1); renderEdit(d); });
   $("#save").onclick = async ()=>{ read(); if(!d.name){ toast("Wpisz nazwę maszyny"); $("#f-name").focus(); return; }
+    oilsLoad(); oilsAdd("eng", d.engOil.type, false); oilsAdd("hyd", d.hydOil.type, false); oilsSave();
     const old = machines.find(x=>x.id===d.id); if(!old || old.hours!==d.hours) d.hoursDate=today();
     const i = machines.findIndex(x=>x.id===d.id); if(i>=0) machines[i]=d; else machines.push(d);
     await persist(d); toast("Zapisano"); go({name:"detail",id:d.id}); };
@@ -421,6 +461,17 @@ function renderEdit(d){
     $("#delNo").onclick = ()=>$("#delBox").innerHTML=""; };
 }
 
+let upd = null, updMsg = "";
+function appVer(){ try{ return window.Android ? +Android.appVersion() : 0; }catch(e){ return 0; } }
+function checkUpdate(){ try{ if(window.Android) Android.checkUpdate(); }catch(e){} }
+window.onUpdateInfo = (txt) => {
+  let info; try{ info = JSON.parse(txt); }catch(e){ info = {error:"Błędna odpowiedź"}; }
+  if(info.error){ updMsg = "Nie udało się sprawdzić (brak internetu?)"; }
+  else { upd = info; updMsg = info.code > appVer() ? "" : "Masz najnowszą wersję"; }
+  if(view.name==="list") render();
+};
+window.onUpdateDone = (ok) => { if(upd) upd.busy = false; if(!ok) toast("Pobieranie nie powiodło się"); if(view.name==="list") render(); };
+setTimeout(checkUpdate, 1500);
 window.appBack = () => {
   if(view.name==="edit"){ const d=view.draft; go(machines.some(x=>x.id===d.id)?{name:"detail",id:d.id}:{name:"list"}); return true; }
   if(view.name==="detail"){ go({name:"list"}); return true; }
