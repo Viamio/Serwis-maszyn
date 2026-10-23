@@ -341,9 +341,12 @@ function renderDetail(m){
   document.querySelectorAll("[data-done]").forEach(b=>b.onclick=async()=>{
     const it = m.items.find(i=>i.id===b.dataset.done);
     if(!b.dataset.ok){ b.dataset.ok=1; b.textContent=`Potwierdź: ${m.hours} mth, dziś`; return; }
-    it.lastH = m.hours; it.lastDate = today();
-    (m.history ||= []).push({date:today(), hours:m.hours, what:it.name + (it.filter?` (${it.filter})`:""), note:""});
-    await persist(m); toast("Zapisano wymianę: "+it.name); render(); });
+    const linked = filtersFor(m.items,it);
+    const parts = [it.name + (it.filter?` (${it.filter})`:"")];
+    for(const x of [it, ...linked]){ x.lastH = m.hours; x.lastDate = today(); }
+    for(const f of linked) parts.push(f.name + (f.filter?` (${f.filter})`:""));
+    (m.history ||= []).push({date:today(), hours:m.hours, what:parts.join(" + "), note:""});
+    await persist(m); toast("Zapisano wymianę: "+parts.map(x=>x.split(" (")[0]).join(" + ")); render(); });
   document.querySelectorAll("[data-lookup]").forEach(b=>b.onclick=()=>lookup(m, m.items.find(i=>i.id===b.dataset.lookup)));
   document.querySelectorAll("[data-addalt]").forEach(b=>b.onclick=async()=>{
     const it = m.items.find(i=>i.id===b.dataset.addalt); const v = b.dataset.val;
@@ -355,6 +358,13 @@ function renderDetail(m){
   });
   document.querySelectorAll("[data-rmalt]").forEach(b=>b.onclick=async()=>{
     const [iid,idx] = b.dataset.rmalt.split(":"); const it=m.items.find(i=>i.id===iid); it.alts.splice(+idx,1); await persist(m); render(); });
+}
+function oilKind(it){ const n=(it.name||"").toLowerCase();
+  if(n.includes("olej silnik")) return "eng"; if(n.includes("olej hydraul")) return "hyd"; return null; }
+function filtersFor(items,it){
+  const k = oilKind(it); if(!k) return [];
+  return items.filter(f=>f!==it && !/olej\s/i.test((f.name||"").replace(/filtr oleju/i,"")) &&
+    (k==="eng" ? /filtr oleju/i.test(f.name||"") : /filtr hydraul/i.test(f.name||"")));
 }
 function oilFor(m,it){ const n=(it.name||"").toLowerCase();
   if(n.includes("olej silnik")) return m.engOil; if(n.includes("olej hydraul")) return m.hydOil; return null; }
@@ -374,7 +384,8 @@ function svcHTML(m,it,ex){
       ${ex?"":`<div class="row" style="flex-wrap:nowrap"><input data-altinput="${it.id}" placeholder="Dopisz zamiennik, np. Mann W 712/75" style="flex:1 1 auto;min-width:0"><button class="small" type="button">Dodaj</button></div>
       ${it.filter?`<button class="small" type="button" data-lookup="${it.id}" ${L?.loading?"disabled":""}>${L?.loading?"Szukam…":(window.Android?"🔍 Szukaj zamienników w Google":"🔍 Znajdź zamienniki i parametry")}</button>`:`<div class="note">Wpisz numer filtra w „Edytuj”, żeby wyszukać zamienniki.</div>`}`}
       ${L?.result?lookupHTML(it,L.result):""}${L?.error?`<div class="warn">${esc(L.error)}</div>`:""}`:""}
-    ${ex?"":`<button class="primary small" type="button" data-done="${it.id}" style="align-self:flex-start">✓ Wymieniono teraz</button>`}
+    ${ex?"":`<button class="primary small" type="button" data-done="${it.id}" style="align-self:flex-start">✓ Wymieniono teraz${filtersFor(m.items,it).length?" (z filtrem)":""}</button>`}
+    ${!ex && filtersFor(m.items,it).length ? `<div class="note">Razem z olejem zapisze się wymiana: ${filtersFor(m.items,it).map(f=>esc(f.name)).join(", ")}</div>` : ""}
   </div>`;
 }
 function lookupHTML(it,res){
@@ -434,7 +445,7 @@ function renderEdit(d){
     <div class="field"><label class="label" for="f-notes">Notatki</label><textarea id="f-notes">${esc(d.notes)}</textarea></div>
   </div>
   <div class="section"><h2>Pozycje serwisowe</h2>
-    <p class="note">Interwał w motogodzinach i/lub miesiącach. „Ostrzeż przed” to zapas (±) — ile mth wcześniej pokazać przypomnienie.</p>
+    <p class="note">Interwał w motogodzinach i/lub miesiącach. „Ostrzeż przed” to zapas (±) — ile mth wcześniej pokazać przypomnienie. Wymiana oleju wpisuje się też przy jego filtrze (np. olej hydrauliczny → filtr hydrauliczny).</p>
     ${d.items.map((it,i)=>`<div class="svc" data-i="${i}">
       <div class="row" style="flex-wrap:nowrap"><input id="i-name-${it.id}" data-k="name" value="${esc(it.name)}" placeholder="Nazwa" style="flex:1 1 auto;min-width:0;font-weight:600">
         <button class="small danger" type="button" data-del="${i}" aria-label="Usuń pozycję">Usuń</button></div>
@@ -462,6 +473,15 @@ function renderEdit(d){
   };
   document.querySelectorAll("[data-fill]").forEach(b=>b.onclick=()=>{ const inp=$("#"+b.dataset.fill); inp.value=b.dataset.val; inp.dispatchEvent(new Event("input")); toast("Wpisano: "+b.dataset.val); });
   document.querySelectorAll("[data-unsave]").forEach(b=>b.onclick=()=>{ read(); const [k,i]=b.dataset.unsave.split(":"); oils[k].splice(+i,1); oilsSave(); renderEdit(d); });
+  document.querySelectorAll('.svc[data-i] [data-k="lastH"], .svc[data-i] [data-k="lastDate"]').forEach(inp=>{
+    inp.addEventListener("change", ()=>{
+      read(); const it = d.items[+inp.closest(".svc").dataset.i]; const linked = filtersFor(d.items,it);
+      if(!linked.length) return;
+      for(const f of linked){ const k = inp.dataset.k; f[k] = it[k];
+        const el = $(`#i-${k}-${f.id}`); if(el) el.value = it[k] ?? ""; }
+      toast("Wpisano to samo przy: " + linked.map(f=>f.name).join(", "));
+    });
+  });
   $("#cancel").onclick = ()=> isNew ? go({name:"list"}) : go({name:"detail",id:d.id});
   $("#addItem").onclick = ()=>{ read(); d.items.push(newItem("",500,12)); renderEdit(d); };
   document.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{ read(); d.items.splice(+b.dataset.del,1); renderEdit(d); });
